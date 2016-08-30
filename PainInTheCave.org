@@ -202,9 +202,9 @@ plan ahead your actions in the -100th
 *** TODO Submit!!!
 
 * TODO Improvement gameplay
-** TODO Allow interrupting actions
-** TODO Priority select targets
-** TODO Begin with 1 Bird, 0 Wolf, 0 Bison and build up from there
+** DONE Allow interrupting actions
+** DONE Priority select targets
+** TODO Progression: Begin with 1 Bird, 0 Wolf, 0 Bison and build up from there
 * DONE Bugs
 ** DONE Gatherer and Scout do not respawn properly
    - in N>1 match if Arrowed

@@ -45,7 +45,7 @@ function love.load()
    Cereal.image = love.graphics.newImage( "data/gfx/Cereal.png" )
    Cereal.hs_x = Cereal.image:getWidth() / 2
    Cereal.hs_y = Cereal.image:getHeight() / 2
-   Cereal.cInitialEnergy = 1 --9
+   Cereal.cInitialEnergy = 50 --9
    Cereal.cTimeoutEnergy = 5
 
    -- Meat params
@@ -491,21 +491,38 @@ function love.keypressed(key)
    end
 end
 
+
+function love.touchpressed( id, x, y, dx, dy, pressure )
+   OnClick( x, y )
+end
+
 function love.mousepressed( x, y, button, istouch )
+   OnClick( x, y )
+end
+
+function OnClick( x, y )
+   -- Game states
    if Game.state == "Menu" then
+      if Game.num_games == 0 then
+         Game.state = "Tutorial"
+      else
+         Game.state = "Playing"
+         NewGame()
+      end
+   elseif Game.state == "Tutorial" then
       Game.state = "Playing"
       NewGame()
    elseif Game.state == "Playing" then
       -- Select MainCharacter
-      if Hunter.state ~= "Dead" and TestPointInBox( x, y, Hunter.pos_x, Hunter.pos_y, Hunter.hs_x, Hunter.hs_y ) then
+      if IsAlive(Hunter) and TestPointInBox( x, y, Hunter.pos_x, Hunter.pos_y, Hunter.hs_x, Hunter.hs_y ) then
          MainCharacter = Hunter
-      elseif Gatherer.state ~= "Dead" and TestPointInBox( x, y, Gatherer.pos_x, Gatherer.pos_y, Gatherer.hs_x, Gatherer.hs_y ) then
+      elseif IsAlive(Gatherer) and TestPointInBox( x, y, Gatherer.pos_x, Gatherer.pos_y, Gatherer.hs_x, Gatherer.hs_y ) then
          MainCharacter = Gatherer
-      elseif Gatherer.state ~= "Scout" and TestPointInBox( x, y, Scout.pos_x, Scout.pos_y, Scout.hs_x, Scout.hs_y ) then
+      elseif IsAlive(Scout) and TestPointInBox( x, y, Scout.pos_x, Scout.pos_y, Scout.hs_x, Scout.hs_y ) then
          MainCharacter = Scout
       else -- Otherwise, Select Target
-         -- TEMP: Can only receive orders whem Idle
-         if MainCharacter.action.name == "Idle" then
+         -- TEMP: ORIGINALLY Could only receive orders on Idle, but was too rigid, now we accept interruptions
+--         if MainCharacter.action.name == "Idle" then
             -- GoToPoint or Shoot if Hunter
             if MainCharacter == Hunter then
                local w = TryToSelectWildlife( x, y )
@@ -517,7 +534,7 @@ function love.mousepressed( x, y, button, istouch )
             else -- If none selected, move to point and wait
                MainCharacter.action = NewAction_GoToPoint( MainCharacter, ApplyBorders( x, y, MainCharacter.archetype.hs_x, MainCharacter.archetype.hs_y ) )
             end
-         end
+--         end
       end
    end
 end
@@ -745,6 +762,21 @@ end
 ----------------------------------------------------------------
 -- Characters
 ----------------------------------------------------------------
+function KillCharacter( c )
+   -- Register as dead
+   c.state = "Dead"
+   c.action = NewAction_Dead()
+   Characters.num_alive = Characters.num_alive - 1
+   -- Move selection automatically
+   if IsAlive( Hunter ) then
+      MainCharacter = Hunter
+   elseif IsAlive( Gatherer ) then
+      MainCharacter = Gatherer
+   elseif IsAlive( Scout ) then
+      MainCharacter = Scout
+   end
+end
+
 function UpdateCharacters( dt )
    for i,c in ipairs(Characters.table) do
       local a = c.archetype
@@ -752,15 +784,13 @@ function UpdateCharacters( dt )
       if c.state == "Starving" then
          c.starving_timeout = c.starving_timeout - dt
          if c.starving_timeout < 0 then
-            c.state = "Dead"
-            c.action = NewAction_Dead()
+            KillCharacter( c )
             Characters.vec_death_sounds.STARVED:play()
-            Characters.num_alive = Characters.num_alive - 1
             NewMessage_Upwards( "STARVED!", 0.5, 0.66, c.pos_x, c.pos_y - a.hs_y, 100, {255,0,0,255} )
          end
       end
       -- Actions
-      if c.state ~= "Dead" then
+      if IsAlive( c ) then
          c.action.time = c.action.time + dt
          if c.action.name == "Idle" then
             -- Nothing
@@ -1007,12 +1037,10 @@ end
 
 function TryToAttackCharacter( attacker_archetype, pos_x, pos_y, hs_x, hs_y )
    for i,c in ipairs(Characters.table) do
-      if c.state == "Alive" or c.state == "Starving" then
+      if IsAlive( c ) then
          if TestOverlapBox( pos_x, pos_y, hs_x, hs_y, c.pos_x, c.pos_y, c.archetype.hs_x, c.archetype.hs_y ) then
-            c.state = "Dead"
-            c.action = NewAction_Dead()
+            KillCharacter( c )
             Characters.vec_death_sounds.KILLED:play()
-            Characters.num_alive = Characters.num_alive - 1
             if attacker_archetype == A_Wolf then
                NewMessage_Upwards( "EATEN!", 0.5, 0.66, c.pos_x, c.pos_y - c.archetype.hs_y, 100, {255,0,0,255} )
             elseif attacker_archetype == A_Bison then
@@ -1079,13 +1107,11 @@ function TryToKillWithProjectile( p )
    for i,c in ipairs(Characters.table) do
       local a = c.archetype
       if a ~= Hunter then
-         if c.state ~= "Dead" then
+         if IsAlive( c ) then
             if TestOverlapBox( p.pos_x, p.pos_y, p.archetype.cAttackHalfsize, p.archetype.cAttackHalfsize,
                                c.pos_x, c.pos_y, c.archetype.cDamageHalfsize, c.archetype.cDamageHalfsize ) then
-               c.state = "Dead"
-               c.action = NewAction_Dead()
+               KillCharacter( c )
                Characters.vec_death_sounds.ARROWED:play()
-               Characters.num_alive = Characters.num_alive - 1
                NewMessage_Upwards( "ARROWED!", 0.5, 0.66, c.pos_x, c.pos_y - a.hs_y, 100, {255,0,0,255} )
                return true
             end
