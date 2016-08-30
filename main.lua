@@ -45,7 +45,7 @@ function love.load()
    Cereal.image = love.graphics.newImage( "data/gfx/Cereal.png" )
    Cereal.hs_x = Cereal.image:getWidth() / 2
    Cereal.hs_y = Cereal.image:getHeight() / 2
-   Cereal.cInitialEnergy = 50 --9
+   Cereal.cInitialEnergy = 1 --9
    Cereal.cTimeoutEnergy = 5
 
    -- Meat params
@@ -698,7 +698,7 @@ function UpdateHeaps( dt )
       Game.death_time = 0
    end
    -- Starving if run out of Food
-   if Cereal.energy == 0 and Cereal.energy == 0 then
+   if Cereal.energy == 0 and Meat.energy == 0 then
       for i,c in ipairs(Characters.table) do
          if c.state == "Alive" then
             c.state = "Starving"
@@ -860,7 +860,9 @@ function UpdateWildlife( dt )
          if w.action_timeout < 0 then
             -- Execute Contextual Action (Attack,Steal)
             if a == A_Wolf then
-               if TryToStealHeap( Meat, w.pos_x, w.pos_y, a.hs_x, a.hs_y ) then
+               if TryToStealResource( A_Carcass, w.pos_x, w.pos_y, a.hs_x, a.hs_y ) then
+                  w.hunger_timeout = a.cHungerTimeout
+               elseif TryToStealHeap( Meat, w.pos_x, w.pos_y, a.hs_x, a.hs_y ) then
                   w.hunger_timeout = a.cHungerTimeout
                elseif TryToAttackCharacter( a, w.pos_x, w.pos_y, a.cAttackHalfsize, a.cAttackHalfsize ) then
                   w.hunger_timeout = a.cHungerTimeout
@@ -893,10 +895,14 @@ function UpdateWildlife( dt )
                                                               a.hs_x, a.hs_y )
                      w.action = NewAction_GoToPoint( w, target_x, target_y )
                   elseif w.hunger_timeout < 0 then -- Priority 1: Fulfill hunger
-                     -- Decide between Steal or Attack
-                     if love.math.random_float(0,1) < 0.25 then
+                     -- Decide between Steal or Attack, but avoid Fire radius/2
+                     local random = love.math.random_float(0,1)
+                     if random < 0.25 then
                         w.action = NewAction_GoToPoint( w, Meat.pos_x, Meat.pos_y )
-                     else
+                     elseif random < 0.5 then
+                        local target_x, target_y = FindClosestResourcePos( A_Carcass, w.pos_x, w.pos_y )
+                        w.action = NewAction_GoToPoint( w, ApplyBorders( target_x, target_y, a.hs_x, a.hs_y ) )
+                     else --random > 0.5
                         if love.math.random_float(0,1) < 0.5 and IsAlive(Gatherer) and Distance( Gatherer, Fire ) > Fire.cRadius/2 then
                            w.action = NewAction_GoToPoint( w, Gatherer.pos_x, Gatherer.pos_y )
                         elseif IsAlive(Hunter) and Distance( Hunter, Fire ) > Fire.cRadius/2 then
@@ -922,7 +928,7 @@ function UpdateWildlife( dt )
                      w.action = NewAction_GoToPoint( w, target_x, target_y )
                   elseif w.hunger_timeout < 0 then -- Priority 1: Fulfill hunger
                      -- Decide between Steal or Gather
-                     if love.math.random_float(0,1) < 0.99 then
+                     if love.math.random_float(0,1) < 0.66 then
                         w.action = NewAction_GoToPoint( w, Cereal.pos_x, Cereal.pos_y )
                      else
                         local target_x, target_y = FindClosestResourcePos( A_Plant, w.pos_x, w.pos_y )
@@ -950,13 +956,25 @@ function UpdateWildlife( dt )
 end
 
 function FindClosestResourcePos( archetype, pos_x, pos_y )
-   -- TODO: FIND CLOSEST!!
+   local closest_resource = nil
+   local closest_distance = Map.width + Map.height
+   local p = {}
+   p.pos_x = pos_x
+   p.pos_y = pos_y
    for i,r in ipairs(Resources.table) do
       if r.archetype == archetype then
-         return r.pos_x, r.pos_y
+         local dist = Distance( p, r )
+         if dist < closest_distance then
+            closest_distance = dist
+            closest_resource = r
+         end
       end
    end
-   return pos_x, pos_y
+   if closest_resource ~= nil then
+      return closest_resource.pos_x, closest_resource.pos_y
+   else
+      return pos_x, pos_y
+   end
 end
 
 function TryToStealResource( archetype, pos_x, pos_y, hs_x, hs_y )
@@ -1028,8 +1046,8 @@ function UpdateProjectiles( dt )
 end
 
 function TryToKillWithProjectile( p )
-   -- Check Wildlife
-   removed_wildlife = {}
+   -- Check Wildlife and remove if hunted
+   local removed_wildlife = {}
    for i,w in ipairs(Wildlife.table) do
       local a = w.archetype
       if w.state ~= "Dead" then
@@ -1051,8 +1069,13 @@ function TryToKillWithProjectile( p )
    for i,idx in ipairs(removed_wildlife) do
       table.remove( Wildlife.table, idx )
    end
+   -- Projectile stops if wildlife is hit
+   if table.getn(removed_wildlife) > 0 then
+         return true
+   end
+
    -- Check Characters
-   removed_characters = {}
+   -- IMPORTANT: we DO NOT remove it, just change state
    for i,c in ipairs(Characters.table) do
       local a = c.archetype
       if a ~= Hunter then
@@ -1063,17 +1086,13 @@ function TryToKillWithProjectile( p )
                c.action = NewAction_Dead()
                Characters.vec_death_sounds.ARROWED:play()
                Characters.num_alive = Characters.num_alive - 1
-               table.insert( removed_characters, i )
                NewMessage_Upwards( "ARROWED!", 0.5, 0.66, c.pos_x, c.pos_y - a.hs_y, 100, {255,0,0,255} )
+               return true
             end
          end
       end
    end
-   for i,idx in ipairs(removed_characters) do
-      table.remove( Characters.table, idx )
-   end
-   --
-   return table.getn(removed_wildlife) > 0 or table.getn(removed_characters) > 0
+   return false
 end
 
 ----------------------------------------------------------------

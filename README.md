@@ -22,8 +22,8 @@ plan ahead your actions in the -100th
 ## Notes
 - Prefer FullScreen, as art is 1920x1080 with no resizing (sorry:_)
 - Web play using love.js (https://github.com/TannerRogalsky/love.js)
-- Offline play requires LÃ¶ve2D (>= 0.10.1), run from the game directory as "love ."
-- Developed in Ubuntu 14.04, but "should" work wherever there's Love.
+- Offline play requires LÖVE (>= 0.10.1), run from the game directory as "love ."
+- Developed in Ubuntu 14.04, but "should" work wherever there's LÖVE.
 - Source included in the .zip, no license, do whatever you feel like with it.
 - Song "Krakatoa" Joseph Gilbert / Kistol (through http://opengameart.org/)
 
